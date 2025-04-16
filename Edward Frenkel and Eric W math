@@ -1,0 +1,181 @@
+import numpy as np
+from typing import List, Dict, Callable
+
+# --- Algebraic Side: q-Characters, Extremal Monomials, X-Series ---
+
+class QCharacter:
+    """
+    Represents the q-character of a quantum affine algebra representation.
+    Each monomial is represented as a key with its coefficient as value.
+    """
+    def __init__(self, monomials: Dict[str, int]):
+        self.monomials = monomials  # e.g., {'Y1': 1, 'Y2^-1': 1, ...}
+
+    def extremal_monomials(self, weyl_group_actions: Dict[str, Callable[[str], str]]) -> Dict[str, int]:
+        """
+        Returns extremal monomials under a collection of Weyl group actions.
+        Each action is a function that transforms a given monomial.
+        """
+        extremals = {}
+        highest = self.highest_monomial()
+        for label, action in weyl_group_actions.items():
+            m_w = action(highest)
+            if m_w in self.monomials and self.monomials[m_w] == 1:
+                extremals[m_w] = 1
+        return extremals
+
+    def highest_monomial(self) -> str:
+        # For simplicity, assume the first key is the highest monomial.
+        return list(self.monomials.keys())[0]
+
+class XSeries:
+    """
+    Represents the X-series as a polynomial in Y-variables.
+    """
+    def __init__(self, extremal_monomial: str, lower_terms: Dict[str, int]):
+        self.extremal_monomial = extremal_monomial
+        self.lower_terms = lower_terms  # e.g., {'Y2': 2, ...}
+
+    def as_polynomial(self) -> Dict[str, int]:
+        # The extremal monomial gets a coefficient 1; lower_terms override or add to that.
+        poly = {self.extremal_monomial: 1}
+        poly.update(self.lower_terms)
+        return poly
+
+    def is_polynomial(self) -> bool:
+        # Checks that all coefficients in the polynomial are integers.
+        return all(isinstance(v, int) for v in self.as_polynomial().values())
+
+# --- Spectral Data and Temporal Computation ---
+
+class DiracOperator:
+    """
+    Abstract Dirac-type operator δ_ω with discrete spectrum.
+    """
+    def __init__(self, eigenvalues: List[float]):
+        self.eigenvalues = np.array(eigenvalues)
+
+    def square(self) -> np.ndarray:
+        return self.eigenvalues ** 2
+
+    def hamiltonian(self) -> np.ndarray:
+        return self.square()
+
+    def time_evolution_operator(self, t: float) -> np.ndarray:
+        """
+        Returns the diagonal time evolution operator U(t) = exp(-i t δ_ω^2)
+        """
+        return np.exp(-1j * t * self.hamiltonian())
+
+# --- GU Framework Embedding ---
+
+class ChimericBundle:
+    """
+    Abstract chimeric bundle C(Y) = V ⊕ H* with Dirac operator.
+    """
+    def __init__(self, dirac_operator: DiracOperator):
+        self.dirac_operator = dirac_operator
+
+    def evolution(self, t: float) -> np.ndarray:
+        return self.dirac_operator.time_evolution_operator(t)
+
+# --- Unified Principle: Discrete Temporal Computation ---
+
+def temporal_computation_example():
+    # Example: 3-level system with eigenvalues λ_k
+    eigenvalues = [1.0, 2.0, 3.0]
+    dirac = DiracOperator(eigenvalues)
+    bundle = ChimericBundle(dirac)
+
+    # Time evolution at t = 1.0
+    U_t = bundle.evolution(t=1.0)
+    print("Discrete time evolution operator U(t):", U_t)
+
+    # X-series polynomial structure
+    x_series = XSeries(extremal_monomial='Y1', lower_terms={'Y2': 2, 'Y3': -1})
+    print("X-series polynomial:", x_series.as_polynomial())
+    print("Polynomiality:", x_series.is_polynomial())
+
+def predict_x_series(extremal_monomial: str, lower_terms: Dict[str, int]) -> Dict[str, int]:
+    """
+    Predict the X-series polynomial structure.
+    """
+    poly = {extremal_monomial: 1}
+    poly.update(lower_terms)
+    return poly
+
+def predict_time_evolution(eigenvalues: List[float], t: float) -> np.ndarray:
+    """
+    Predict the time evolution operator for given eigenvalues at time t.
+    """
+    ev_array = np.array(eigenvalues)
+    return np.exp(-1j * t * np.square(ev_array))
+
+def predict_future_state(eigenvalues: List[float], t: float) -> np.ndarray:
+    """
+    Predict the quantum state evolution at time t using the Dirac spectrum.
+    """
+    return predict_time_evolution(eigenvalues, t)
+
+def predict_spectral_structure(extremal_monomial: str, lower_terms: Dict[str, int]) -> Dict[str, int]:
+    """
+    Predicts the X-series polynomial structure from extremal and lower terms.
+    """
+    poly = {extremal_monomial: 1}
+    poly.update(lower_terms)
+    return poly
+
+def predictive_gaussian_weighted_moving_average(
+    eigenvalues: List[float],
+    t: float,
+    extremal_monomial: str,
+    lower_terms: Dict[str, int],
+    window: int = 3,
+    sigma: float = 1.0
+) -> Dict[str, complex]:
+    """
+    Predicts the X-series polynomial structure at time t,
+    weighting each term by a Gaussian kernel centered at t,
+    using the Dirac spectrum as the predictive signal.
+    """
+    # Generate time points for the moving window.
+    times = np.linspace(t - window // 2, t + window // 2, window)
+    # Compute Gaussian weights centered at t.
+    weights = np.exp(-0.5 * ((times - t) / sigma) ** 2)
+    weights /= np.sum(weights)
+
+    # Compute the time evolution for each time point.
+    evolutions = [predict_time_evolution(eigenvalues, tau) for tau in times]
+
+    # Weighted sum of evolutions (result is an array with the same shape as the eigenvalues array).
+    weighted_evolution = np.tensordot(weights, evolutions, axes=([0], [0]))
+
+    # Combine with X-series structure: assign each polynomial term a weighted spectral value.
+    poly = {extremal_monomial: weighted_evolution[0]}
+    # For subsequent terms, cycle through indices of weighted_evolution.
+    ev_len = len(weighted_evolution)
+    for i, (k, v) in enumerate(lower_terms.items(), start=1):
+        poly[k] = v * weighted_evolution[i % ev_len]
+    return poly
+
+# --- Main Execution ---
+
+if __name__ == "__main__":
+    print("Temporal Computation Example")
+    temporal_computation_example()
+    
+    print("\nX-Series Prediction")
+    poly_pred = predict_x_series('Y1', {'Y2': 2, 'Y3': -1})
+    print("Predicted X-series polynomial:", poly_pred)
+    
+    print("\nFuture State Prediction")
+    eigenvalues = [1.0, 2.0, 3.0]
+    future_state = predict_future_state(eigenvalues, t=1.0)
+    print("Predicted future state:", future_state)
+    
+    print("\nWeighted Gaussian Moving Average Polynomial Structure")
+    weighted_poly = predictive_gaussian_weighted_moving_average(
+        eigenvalues, t=1.0, extremal_monomial='Y1', lower_terms={'Y2': 2, 'Y3': -1},
+        window=5, sigma=1.0
+    )
+    print("Weighted Gaussian Moving Average Polynomial structure:", weighted_poly)
